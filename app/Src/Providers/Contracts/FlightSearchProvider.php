@@ -2,8 +2,8 @@
 
 namespace App\Src\Providers\Contracts;
 
-use App\Src\FlightCollection;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 interface FlightSearchProvider
 {
@@ -11,5 +11,5 @@ interface FlightSearchProvider
         string $origin,
         string $destination,
         Carbon $date
-    ) : FlightCollection;
+    ) : Collection;
 }

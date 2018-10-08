@@ -2,9 +2,9 @@
 
 namespace App\Src\Providers\Contracts;
 
-use App\Src\FlightCollection;
+use Illuminate\Support\Collection;
 
 interface DirectFlightProvider
 {
-    public function directFlights(int $offset = 0, ?int $limit = null) : FlightCollection;
+    public function directFlights() : Collection;
 }

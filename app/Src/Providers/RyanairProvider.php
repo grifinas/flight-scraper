@@ -43,43 +43,29 @@ class RyanairProvider extends Provider implements
      *
      * @return FlightCollection
      */
-    public function directFlights(
-        int $offset = 0,
-        ?int $limit = null
-    ) : FlightCollection {
-        $builder = $this->getRequestBuilder();
-
-        $builder->directFlightRequest()
-            ->set('offset', $offset);
-
-        if ($limit) {
-            $builder->set('limit', $limit);
-        }
-
-        $request = $builder->build();
-
-        $hash = md5(implode(',', $request->getParameters()));
-
+    public function directFlights() : Collection
+    {
         return Cache::remember(
-            "ryanair_direct_flights:$hash",
+            "ryanair_direct_flights",
             Config::get('providers.ryanair.direct_flight_cache_minutes'),
-            function () use ($request) {
-                $response = $request->getDirectFlights();
+            function () {
+                $allRoutes = [];
+                foreach ($this->allAirports() as $airport) {
+                    $origin = $airport['iataCode'];
 
-                $flightCollection = new Collection;
-            
-                //TODO Don't cache this
-                if (!$response) {
-                    return new FlightCollection(0, $flightCollection);
+                    foreach (array_get($airport, 'routes', []) as $route) {
+                        if (starts_with($route, 'airport:')) {
+                            $destination = substr($route, 8, 3);
+
+                            $allRoutes[] = [
+                                'origin' => $origin,
+                                'destination' => $destination
+                            ];
+                        }
+                    }
                 }
 
-                foreach ($response['fares'] as $fare) {
-                    $flightCollection->push(
-                        new Flight(new FlightData($fare, FlightData::OUTBOUND_FARE))
-                    );
-                }
-    
-                return new FlightCollection($response['total'], $flightCollection);
+                return collect($allRoutes);
             }
         );
     }
@@ -91,13 +77,13 @@ class RyanairProvider extends Provider implements
      * @param string $destination IATA code of our destination
      * @param Carbon $date        Date and time we're looking to depart at
      *
-     * @return FlightCollection
+     * @return Collection
      */
     public function searchFlights(
         string $origin,
         string $destination,
         Carbon $date
-    ) : FlightCollection {
+    ) : Collection {
         if (!$this->routeExists($origin, $destination)) {
             throw new ProviderException(
                 "Route not found",
@@ -110,11 +96,11 @@ class RyanairProvider extends Provider implements
             ->set('destination', $destination)
             ->set('dateFrom', $date->format('Y-m-d'))
             ->build();
-        
+
         $response = $request->getSearchedFlights();
 
-        $flightCollection = new FlightCollection(0, new Collection());
-            
+        $flightCollection = new Collection();
+
         if (!$response) {
             return $flightCollection;
         }
@@ -122,15 +108,21 @@ class RyanairProvider extends Provider implements
         $trips = array_get($response, 'trips', []);
 
         foreach ($trips as $trip) {
-            //Api supports leeway for departure date. We don't, so take the first date
+            //Api supports leeway for departure date.
+            //We don't, so take the first date
             $flights = array_get($trip, 'dates.0.flights', []);
 
             if (empty($flights)) {
-                throw new ProviderException("No flights", ProviderException::NOT_FOUND);
+                throw new ProviderException(
+                    "No flights",
+                    ProviderException::NOT_FOUND
+                );
             }
 
             foreach ($flights as $flight) {
-                $flightCollection->addFlight(new Flight(new TripData($trip, $flight)));
+                $flightCollection->push(
+                    new Flight(new TripData($trip, $flight))
+                );
             }
         }
 

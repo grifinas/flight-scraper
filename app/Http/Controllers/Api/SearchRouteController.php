@@ -25,8 +25,8 @@ class SearchRouteController
         
         $providers = $this->providerManager->generateSearchFlightProviders();
 
-        foreach ($response['valid'] as $identifier => $request) {
-            foreach ($providers as $provider) {
+        foreach ($providers as $provider) {
+            foreach ($response['valid'] as $identifier => $request) {
                 try {
                     $flights = $provider->searchFlights(
                         $request['origin'],
@@ -34,15 +34,17 @@ class SearchRouteController
                         Carbon::parse($request['date'])
                     );
     
-                    $response[$identifier] = $flights
+                    $response[$identifier][] = $flights
                         ->getCollection()
                         ->toArray();
                 } catch (ProviderException $e) {
-                    Log::error([
-                        'message' => $e->getMessage(),
-                        'code' => $e->getCode(),
-                        'request' => $content
-                    ]);
+                    Log::error(
+                        $e->getMessage(),
+                        [
+                            'code' => $e->getCode(),
+                            'request' => $content,
+                        ]
+                    );
 
                     $response['errors'][] = [
                         'identifier' => $identifier,
@@ -97,6 +99,7 @@ class SearchRouteController
      * Check if search request is valid in structure
      *
      * @param array $searchRequest Search request data
+     *
      * @return bool
      */
     private function isValid(array $searchRequest) : bool
